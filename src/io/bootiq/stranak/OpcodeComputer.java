@@ -3,12 +3,11 @@ package io.bootiq.stranak;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.lang.reflect.Array;
 import java.util.Arrays;
 
 public class OpcodeComputer {
 
-    public Integer[] readInput() throws FileNotFoundException {
+    public Integer[] readMemory() throws FileNotFoundException {
         BufferedReader bufferedReader = new BufferedReader(new FileReader("input/opcode_input.txt"));
         var optionalString = bufferedReader.lines().reduce((s1, s2) -> s1.concat(s2));
 
@@ -19,50 +18,78 @@ public class OpcodeComputer {
         return null;
     }
 
-    private int processOpcode(Integer[] input, int position) {
-        int operand = input[position];
+    private int executeInstruction(Integer[] memory, int memoryPointer) {
+        int instruction = memory[memoryPointer];
 
-        switch (operand) {
+        switch (instruction) {
             case 1:
-                input[input[position + 3]] = input[input[position + 1]] + input[input[position + 2]];
-                return position + 4;
+                memory[memory[memoryPointer + 3]] = memory[memory[memoryPointer + 1]] + memory[memory[memoryPointer + 2]];
+                return memoryPointer + 4;
             case 2:
-                input[input[position + 3]] = input[input[position + 1]] * input[input[position + 2]];
-                return position + 4;
+                memory[memory[memoryPointer + 3]] = memory[memory[memoryPointer + 1]] * memory[memory[memoryPointer + 2]];
+                return memoryPointer + 4;
             case 99:
             default:
                 return -1;
         }
     }
 
-    public void processOpcodeInput(Integer[] input) {
+    public void processMemory(Integer[] memory, Integer noun, Integer verb) {
         int position = 0;
 
+        if (noun != null) {
+            memory[1] = noun;
+        }
+
+        if (verb != null) {
+            memory[2] = verb;
+        }
+
         do {
-            position = processOpcode(input, position);
+            position = executeInstruction(memory, position);
         } while (position >= 0);
     }
 
-    public int restoreErrorState(Integer[] input) throws FileNotFoundException {
-        input[1] = 12;
-        input[2] = 2;
+    public int[] findNounAndVerbForOutput(Integer[] memory, int targetOutput) {
+        int[] foundWords = null;
 
-        processOpcodeInput(input);
+        for (int noun = 0; noun < 100; noun++) {
+            if (foundWords != null) {
+                break;
+            }
 
-        return input[0];
+            for (int verb = 0; verb < 100; verb++) {
+                var memoryCopy = memory.clone();
+                processMemory(memoryCopy, noun, verb);
+                int output = memoryCopy[0];
+
+                if (output == targetOutput) {
+                    foundWords = new int[]{noun, verb};
+                    break;
+                }
+            }
+        }
+
+        return foundWords;
     }
 
     public static void main(String[] args) throws FileNotFoundException {
         OpcodeComputer opcodeComputer = new OpcodeComputer();
-        var input = opcodeComputer.readInput();
+        Integer[] memory = opcodeComputer.readMemory();
+        Integer[] memoryCopy = memory.clone();
 
-//        Integer[] testInput = new Integer[]{1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50};
-//        opcodeComputer.processOpcodeInput(testInput);
-//
-//        System.out.println("Opcode after processing");
-//        Arrays.stream(testInput).forEach(i -> System.out.print(i + ", "));
+//        opcodeComputer.processMemory(memoryCopy, 12, 2);
+//        System.out.println("Value at memory zero position: " + memoryCopy[0]);
 
-        System.out.println("Value at zero position: " + opcodeComputer.restoreErrorState(input));
+        int targetOutput = 19690720;
+        int[] words = opcodeComputer.findNounAndVerbForOutput(memory, targetOutput);
+
+        if (words == null || words.length < 2) {
+            System.out.println(String.format("Noun and verb that produces output '%d' not found", targetOutput));
+        } else {
+            System.out.println(String.format("Found noun and verb for output %d: [%d, %d]", targetOutput, words[0], words[1]));
+            System.out.println("100 * NOUN + VERB = " + (100 * words[0] + words[1]));
+        }
     }
 
 }
