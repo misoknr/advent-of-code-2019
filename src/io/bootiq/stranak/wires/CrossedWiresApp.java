@@ -21,47 +21,59 @@ public class CrossedWiresApp {
             char direction = move.charAt(0);
             int distance = Integer.parseInt(move.substring(1));
             int[] newPosition = currentPosition.clone();
+            boolean vectorHorizontal = false;
+            boolean unknownOperation = false;
 
             switch (direction) {
                 case 'U':
                     newPosition[1] += distance;
-                    wire.addVerticalVector(currentPosition.clone(), newPosition.clone());
                     break;
                 case 'D':
                     newPosition[1] -= distance;
-                    wire.addVerticalVector(newPosition.clone(), currentPosition.clone());
                     break;
                 case 'R':
                     newPosition[0] += distance;
-                    wire.addHorizontalVector(currentPosition.clone(), newPosition.clone());
+                    vectorHorizontal = true;
                     break;
                 case 'L':
                     newPosition[0] -= distance;
-                    wire.addHorizontalVector(newPosition.clone(), currentPosition.clone());
+                    vectorHorizontal = true;
                     break;
                 default:
+                    unknownOperation = true;
                     break;
             }
 
+            if (unknownOperation) {
+                continue;
+            }
+
+            wire.addVector(vectorHorizontal, currentPosition.clone(), newPosition.clone());
             currentPosition = newPosition;
         }
 
         return wire;
     }
 
-    private List<int[]> findVectorIntersections(List<int[][]> horizontalVectors, List<int[][]> verticalVectors) {
+    private List<int[]> findVectorIntersections(List<Wire.Vector> horizontalVectors, List<Wire.Vector> verticalVectors) {
         List<int[]> intersections = new ArrayList<>();
 
-        for (int[][] horizontal : horizontalVectors) {
-            for (int[][] vertical : verticalVectors) {
-                int horizontalVectorY = horizontal[0][1];
-                int horizontalVertex1X = horizontal[0][0];
-                int horizontalVertex2X = horizontal[1][0];
-                int verticalVectorX = vertical[0][0];
-                int verticalVertex1Y = vertical[0][1];
-                int verticalVertex2Y = vertical[1][1];
+        for (Wire.Vector horizontal : horizontalVectors) {
+            for (Wire.Vector vertical : verticalVectors) {
+                int horizontalVectorY = horizontal.getStartVertex()[1];
+                int verticalVectorX = vertical.getStartVertex()[0];
 
-                if (verticalVectorX > horizontalVertex1X && verticalVectorX <= horizontalVertex2X && horizontalVectorY > verticalVertex1Y && horizontalVectorY <= verticalVertex2Y) {
+                List<int[]> horizontalVertices = new ArrayList<>();
+                horizontalVertices.add(horizontal.getStartVertex());
+                horizontalVertices.add(horizontal.getEndVertex());
+                horizontalVertices.sort(Comparator.comparingInt(o -> o[0]));
+
+                List<int[]> verticalVertices = new ArrayList<>();
+                verticalVertices.add(vertical.getStartVertex());
+                verticalVertices.add(vertical.getEndVertex());
+                verticalVertices.sort(Comparator.comparingInt(o -> o[1]));
+
+                if (verticalVectorX >= horizontalVertices.get(0)[0] && verticalVectorX <= horizontalVertices.get(1)[0] && horizontalVectorY > verticalVertices.get(0)[1] && horizontalVectorY <= verticalVertices.get(1)[1]) {
                     if (verticalVectorX != 0 && horizontalVectorY != 0) {
                         intersections.add(new int[]{verticalVectorX, horizontalVectorY});
                     }
@@ -85,12 +97,73 @@ public class CrossedWiresApp {
         return intersections;
     }
 
+    public int[] calculateIntersectionDistances(Wire wire, List<int[]> intersections) {
+        int[] distances = new int[intersections.size()];
+        int distanceTravelled = 0;
+        List<Integer> crossedIntersectionIndices = new ArrayList<>();
+
+        for (Wire.Vector vector : wire.getVectors()) {
+            for (int i = 0; i < intersections.size(); i++) {
+                if (crossedIntersectionIndices.contains(i)) {
+                    continue;
+                }
+
+                int distanceToIntersection = getDistanceOfVertexOnVector(intersections.get(i), vector);
+
+                if (distanceToIntersection != -1) {
+                    distances[i] = distanceTravelled + distanceToIntersection;
+                    crossedIntersectionIndices.add(i);
+                }
+            }
+
+            distanceTravelled += vector.getVectorLength();
+        }
+
+        return distances;
+    }
+
+    private int getDistanceOfVertexOnVector(int[] vertex, Wire.Vector vector) {
+        int[] vectorStart = vector.getStartVertex();
+        int[] vectorEnd = vector.getEndVertex();
+
+        if (vector.isHorizontal() && vector.getStartVertex()[1] == vertex[1]) {
+            if ((vectorStart[0] < vectorEnd[0] && vertex[0] >= vectorStart[0] && vertex[0] <= vectorEnd[0])
+                    || (vectorStart[0] > vectorEnd[0] && vertex[0] <= vectorStart[0] && vertex[0] >= vectorEnd[0])) {
+                return Math.abs(vectorStart[0] - vertex[0]);
+            }
+        }
+
+        if (!vector.isHorizontal() && vector.getStartVertex()[0] == vertex[0]) {
+            if ((vectorStart[1] < vectorEnd[1] && vertex[1] >= vectorStart[1] && vertex[1] <= vectorEnd[1])
+                    || (vectorStart[1] > vectorEnd[1] && vertex[1] <= vectorStart[1] && vertex[1] >= vectorEnd[1])) {
+                return Math.abs(vectorStart[1] - vertex[1]);
+            }
+        }
+
+        return -1;
+    }
+
+    public int calculateLeastIntersectionSteps(List<int[]> intersections, List<Wire> wires) {
+        int[] wireAIntersectionDistances = calculateIntersectionDistances(wires.get(0), intersections);
+        int[] wireBIntersectionDistances = calculateIntersectionDistances(wires.get(1), intersections);
+        Integer lowestDistance = null;
+
+        for (int i = 0; i < intersections.size(); i++) {
+            int distanceSum = wireAIntersectionDistances[i] + wireBIntersectionDistances[i];
+            if (lowestDistance == null || lowestDistance > distanceSum) {
+                lowestDistance = distanceSum;
+            }
+        }
+
+        return lowestDistance;
+    }
+
     public static void main(String[] args) throws FileNotFoundException {
         CrossedWiresApp app = new CrossedWiresApp();
 
 //        List<String> wireInput = new ArrayList<>();
-//        wireInput.add("R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51");
-//        wireInput.add("U98,R91,D20,R16,D67,R40,U7,R15,U6,R7");
+//        wireInput.add("R75,D30,R83,U83,L12,D49,R71,U7,L72");
+//        wireInput.add("U62,R66,U55,R34,D71,R55,D58,R83");
 
         List<String> wireInput = app.loadWirePaths();
         List<Wire> wires = wireInput.stream().map(wirePath -> app.processWirePath(wirePath)).collect(Collectors.toList());
@@ -104,5 +177,9 @@ public class CrossedWiresApp {
 
         int shortestPath = intersections.stream().map(coordinates -> Math.abs(coordinates[0]) + Math.abs(coordinates[1])).min(Integer::compareTo).get();
         System.out.println(String.format("Nearest intersection distance: %d", shortestPath));
+
+        int lowestIntersectionStepsSum = app.calculateLeastIntersectionSteps(intersections, wires);
+
+        System.out.println(String.format("Lowest number of combined steps to intersection: %d", lowestIntersectionStepsSum));
     }
 }
